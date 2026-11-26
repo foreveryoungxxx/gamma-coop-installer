@@ -622,6 +622,17 @@ namespace GammaCoop
             {
                 L(p, "", CText);
                 L(p, "✓ Уже актуально — эта сборка уже применена.", COk);
+                if (d.GammaDiff.Count > 0)
+                {
+                    // the build is in place, but the GAMMA base itself is another version: still offer [U]
+                    L(p, "", CText);
+                    L(p, "Но база GAMMA другая, чем у отправителя (" + string.Join(", ", d.GammaDiff.ToArray()) + ")", CWarn);
+                    LW(p, "[U] доведёт твою GAMMA точно до его версии (нужно 40+ ГБ свободного места, не прерывай), потом заново применит сборку.", CWarn);
+                    p.Keys = "[U] Обновить GAMMA до его версии   [Esc] Назад";
+                    p.Hot[ConsoleKey.U] = delegate () { ApplyGate(true); };
+                    pg = p;
+                    return;
+                }
                 L(p, "Ничего менять не нужно. Если игра сломалась — в меню [4] Починить кооп.", CText);
                 p.Keys = "[Esc] Назад";
                 pg = p;
@@ -795,7 +806,7 @@ namespace GammaCoop
             HubKey(esc); HubKey(esc);
 
             // [2] load: GAMMA versions differ -> [U]
-            simSame = false; simGammaDiff = true;
+            simSame = true; simGammaDiff = true;   // build already applied, but the GAMMA base differs -> [U] must still be offered
             HubEnter(1); HubKey(enter); em("hub: [2] diff, other GAMMA version");
             HubKey(Key(ConsoleKey.U, 'u'));
             string upd = "no engine";
@@ -810,7 +821,7 @@ namespace GammaCoop
             screen = 3; pg = null;
 
             // [2] load: plain apply
-            simGammaDiff = false;
+            simSame = false; simGammaDiff = false;
             HubEnter(1); HubKey(enter); em("hub: [2] diff, normal");
             HubKey(enter);
             string app = "no engine";

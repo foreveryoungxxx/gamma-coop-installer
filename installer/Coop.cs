@@ -921,7 +921,7 @@ namespace GammaCoop
                 foreach (KeyValuePair<string, string> kv in plan.Info.Gamma)
                 {
                     string lv;
-                    if (local.TryGetValue(kv.Key, out lv) && !string.Equals(lv, kv.Value, StringComparison.OrdinalIgnoreCase)) d.GammaDiff.Add(kv.Key);
+                    if (!local.TryGetValue(kv.Key, out lv) || !string.Equals(lv, kv.Value, StringComparison.OrdinalIgnoreCase)) d.GammaDiff.Add(kv.Key);   // unknown local version counts as different
                 }
             }
             return d;
