@@ -1,0 +1,9 @@
+# logs and local state
+installer/logs/
+*.log
+
+# build files contain other authors' mods - never publish
+*.zip
+
+# local temp
+*.tmp

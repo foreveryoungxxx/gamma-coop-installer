@@ -1,0 +1,30 @@
+ОТКАЗ ОТ ОТВЕТСТВЕННОСТИ / DISCLAIMER
+
+1. Скачивай установщик GAMMA Coop только из официального источника.
+   Официальный источник: https://github.com/foreveryoungxxx/gamma-coop-installer
+   Если ты получил установщик или файл сборки с другого сайта, из чужого
+   канала или от незнакомого человека — не запускай его.
+
+2. Автор не несёт ответственности за изменённые копии проекта, за копии
+   со сторонних сайтов и сервисов, а также за любой вред от них
+   (вирусы, потеря файлов, сохранений, аккаунтов и т. п.).
+
+3. Файл сборки (GAMMA_Coop_build_....zip) может поменять моды в игре.
+   Загружай сборки только от людей, которым доверяешь.
+
+4. Проект распространяется «как есть», без каких-либо гарантий.
+   Ты используешь его на свой риск. Перед установкой сохрани важные данные.
+
+5. Это неофициальный фанатский проект. Он не связан с GSC Game World,
+   авторами Anomaly, G.A.M.M.A. и xrRazom. Все игры и моды принадлежат
+   их авторам; установщик скачивает их из их собственных источников.
+
+---
+
+1. Download the GAMMA Coop installer only from the official source.
+2. The author is not responsible for modified copies or copies from third-party
+   sites, or for any damage they cause.
+3. Load build files only from people you trust.
+4. Provided "as is", without warranty of any kind. Use at your own risk.
+5. Unofficial fan project, not affiliated with GSC Game World or the authors of
+   Anomaly, G.A.M.M.A. or xrRazom.

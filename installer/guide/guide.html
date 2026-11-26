@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GAMMA Coop — как играть</title>
+<style>
+:root{
+  --bg:#0b0d0a; --panel:#10150f; --line:#1c4a1f; --line2:#2c6e2c;
+  --g1:#3f9a39; --g2:#5cc24c; --g3:#86e06c; --g4:#b8f59e; --g5:#e7ffd9;
+  --text:#e2f3da; --muted:#86a37d; --dim:#3e5638; --warn:#f2c94c;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:17px/1.65 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:32px 20px 56px}
+header{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:26px}
+.brand{font:700 14px/1.5 Consolas,"Courier New",monospace;letter-spacing:.28em;color:var(--g3);text-transform:uppercase}
+h1{font:700 32px/1.2 Consolas,"Courier New",monospace;color:var(--g5);margin:10px 0 8px}
+.meta{font:14px Consolas,"Courier New",monospace;color:var(--muted);letter-spacing:.06em}
+nav{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 18px;margin-bottom:34px}
+nav b{font:700 13px Consolas,"Courier New",monospace;letter-spacing:.2em;color:var(--g2);text-transform:uppercase}
+nav ol{margin:8px 0 0;padding-left:22px}
+nav li{margin:3px 0}
+a{color:var(--g3);text-decoration:none;border-bottom:1px dotted var(--g1)}
+a:hover{color:var(--g5)}
+section{margin-bottom:40px}
+h2{font:700 21px/1.3 Consolas,"Courier New",monospace;letter-spacing:.08em;color:var(--g4);
+  margin:0 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+h2 span{color:var(--g1);margin-right:.5em}
+h3{font:700 15px Consolas,"Courier New",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--g2);margin:22px 0 8px}
+p{margin:0 0 12px}
+ol.steps,ul{padding-left:0;margin:0 0 14px;list-style:none}
+ol.steps{counter-reset:s}
+ol.steps li{counter-increment:s;position:relative;padding:4px 0 4px 44px;margin:6px 0}
+ol.steps li:before{content:counter(s);position:absolute;left:0;top:5px;width:30px;height:30px;border:1px solid var(--g1);
+  border-radius:50%;text-align:center;line-height:28px;font:700 14px Consolas,"Courier New",monospace;color:var(--g3);background:var(--bg)}
+ul li{position:relative;padding:3px 0 3px 22px}
+ul li:before{content:"\25B8";position:absolute;left:2px;color:var(--g1)}
+.note{border-left:3px solid var(--warn);background:#1a1707;padding:10px 14px;margin:14px 0;border-radius:0 6px 6px 0}
+.note b{font:700 12px Consolas,"Courier New",monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--warn);margin-right:.6em}
+code,kbd,.k{font:15px Consolas,"Courier New",monospace;background:#0f2a12;color:var(--g4);border:1px solid var(--line);border-radius:4px;padding:1px 6px;white-space:nowrap}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 18px 10px;margin:14px 0}
+dl{margin:0}
+dt{font-weight:700;color:var(--g4);margin-top:16px}
+dd{margin:4px 0 0;color:var(--text)}
+footer{border-top:1px solid var(--line);padding-top:18px;color:var(--dim);font:13px Consolas,"Courier New",monospace;letter-spacing:.12em;text-align:center}
+@media (max-width:520px){
+  body{font-size:16px}
+  .wrap{padding:20px 14px 40px}
+  h1{font-size:24px}
+  .brand{letter-spacing:.14em;font-size:12px}
+  h2{font-size:18px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand">S.T.A.L.K.E.R. G.A.M.M.A. COOP</div>
+  <h1>GAMMA Coop — как играть</h1>
+  <div class="meta">GAMMA Coop 0.95 · xrRazom 1.5 · стабильная</div>
+</header>
+
+<nav>
+  <b>Содержание</b>
+  <ol>
+    <li><a href="#start">Запуск</a></li>
+    <li><a href="#first">Первый запуск</a></li>
+    <li><a href="#play">Как играть вместе</a></li>
+    <li><a href="#rules">Правила, чтобы не ломалось</a></li>
+    <li><a href="#repair">Если пропал кооп</a></li>
+    <li><a href="#faq">Частые проблемы</a></li>
+  </ol>
+</nav>
+
+<section id="start">
+  <h2><span>01</span>Запуск</h2>
+  <p>Запускать игру нужно только через ярлык <b>«GAMMA Coop»</b> на рабочем столе.</p>
+  <div class="note"><b>Важно</b>Не запускать от имени администратора — иначе Discord не покажет игру.</div>
+  <ol class="steps">
+    <li>Откроется Mod Organizer 2.</li>
+    <li>Сверху справа выбрать <code>Anomaly (DX11)</code> и нажать <code>Run</code>.</li>
+    <li>Моды в списке слева не трогать.</li>
+  </ol>
+</section>
+
+<section id="first">
+  <h2><span>02</span>Первый запуск</h2>
+  <ol class="steps">
+    <li>Открыть <code>Настройки → xrRazom Co-op</code>, вкладка <code>Player</code>, и задать имя игрока.</li>
+    <li>Назначить клавиши метки и чата: <code>Настройки → Управление → Клавиши → xrRazom Co-op</code> (в самом низу списка).</li>
+  </ol>
+  <div class="note"><b>Важно</b>Имя = профиль у хоста. Если поменять имя, хост увидит нового игрока.</div>
+  <div class="note"><b>Важно</b>Без назначенной клавиши метка и чат не работают.</div>
+</section>
+
+<section id="play">
+  <h2><span>03</span>Как играть вместе</h2>
+  <p>Основной способ — по IP через Radmin VPN. Игра выбирает способ при запуске по тому, открыт ли Steam, поэтому для этого способа Steam нужно закрыть.</p>
+
+  <h3>Через Radmin VPN (основной способ)</h3>
+  <ol class="steps">
+    <li>Каждый игрок устанавливает Radmin VPN (бесплатно): <a href="https://www.radmin-vpn.com">radmin-vpn.com</a>.</li>
+    <li>Хост создаёт сеть: <code>Сеть → Создать сеть</code>, задаёт имя и пароль и сообщает их друзьям. Остальные: <code>Сеть → Присоединиться к сети</code>.</li>
+    <li>IP хоста — тот, что показан в Radmin VPN рядом с именем хоста (начинается с <code>26.</code>).</li>
+    <li>Все закрывают Steam перед запуском игры.</li>
+    <li>Хост: <code>Настройки → xrRazom Co-op → Hosting</code>, включить только <code>Host session on game start</code>, затем начать новую игру или загрузить сохранение.</li>
+    <li>Остальные: главное меню → <code>Connect to Session</code> → IP хоста из Radmin VPN → <code>Join</code>.</li>
+  </ol>
+  <div class="note"><b>Важно</b>Если не подключается: при первом запуске Windows может спросить про брандмауэр — разрешите игре доступ (для частных и общественных сетей).</div>
+  <p>Без Radmin VPN можно играть по обычному IP, если у хоста открыт порт (настройка <code>Hosting → LAN port</code>).</p>
+
+  <h3>Через Steam (если у всех есть Зов Припяти в Steam)</h3>
+  <div class="note"><b>Важно</b>У всех открыт Steam до запуска игры, и у КАЖДОГО на аккаунте есть S.T.A.L.K.E.R.: Call of Pripyat (Зов Припяти).</div>
+  <ul>
+    <li><b>Хост:</b> <code>Настройки → xrRazom Co-op → Hosting</code>, включить <code>Host session on game start</code> и <code>Host via Steam ID</code>, затем новая игра или загрузка.</li>
+    <li><b>Остальные:</b> в главном меню открыть оверлей Steam (<kbd>Shift+Tab</kbd>) → друг → <code>Присоединиться</code>.</li>
+  </ul>
+
+  <h3>После подключения</h3>
+  <ul>
+    <li>После запуска хост увидит уведомление о старте сервера.</li>
+    <li>Новый игрок выбирает стартовое снаряжение и жмёт <code>Start</code>.</li>
+    <li>Играть можно до 5 человек.</li>
+  </ul>
+</section>
+
+<section id="rules">
+  <h2><span>04</span>Правила, чтобы не ломалось</h2>
+  <ol class="steps">
+    <li>У всех одна и та же сборка — GAMMA Coop 0.95. Иначе подключение отклонят. В логе строка <code>[xrRazom] cfg-diff</code> покажет, какой файл не совпал.</li>
+    <li>Хост сохраняется перед выходом.</li>
+    <li>Сохраняйтесь чаще — бывают вылеты при сохранении, загрузке и переходе между локациями.</li>
+    <li>Не загружать автосейв, сделанный у подключившегося игрока.</li>
+    <li>Правила сессии (огонь по своим, спасение раненых и т. п.) задаёт хост.</li>
+  </ol>
+</section>
+
+<section id="repair">
+  <h2><span>05</span>Если пропал кооп</h2>
+  <p>После обновления GAMMA через её лаунчер или после переустановки кооп слетает — возвращаются обычные exe.</p>
+  <ol class="steps">
+    <li>Запустить установщик GAMMA Coop.</li>
+    <li>Нажать <span class="k">[K]</span> «Починить кооп».</li>
+  </ol>
+  <div class="note"><b>Важно</b>Не обновлять GAMMA без хоста — версии должны совпадать.</div>
+</section>
+
+<section id="faq">
+  <h2><span>06</span>Частые проблемы</h2>
+  <div class="card">
+  <dl>
+    <dt>Discord не показывает игру</dt>
+    <dd>Проверьте: Discord запущен, игра открыта через ярлык и не от имени администратора.</dd>
+    <dt>Не пускает к хосту</dt>
+    <dd>Проверьте: в Radmin VPN хост онлайн (зелёная точка), у всех закрыт Steam, у всех одна и та же сборка (при необходимости — «Починить кооп»). Если играете через Steam — у всех открыт Steam и есть Зов Припяти.</dd>
+    <dt>Озвучка героя зависит от группировки</dt>
+    <dd>Это мод Faction-Based Voiced Actor. Его настройки — в меню MCM.</dd>
+  </dl>
+  </div>
+</section>
+
+<footer>сделано для своих</footer>
+
+</div>
+</body>
+</html>

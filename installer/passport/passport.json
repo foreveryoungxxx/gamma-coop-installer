@@ -1,0 +1,16 @@
+﻿{
+  "name": "GAMMA Coop 0.95",
+  "channel": "стабильная",
+  "xrrazom": "1.5",
+  "definition": 920,
+  "repos": {
+    "Stalker_GAMMA": "ab0f743af42a3b3b0b0ee853b3676f5189f7f0d0",
+    "gamma_large_files_v2": "908f620510858f3c00aa121db9c4ca2c0c8380b0",
+    "teivaz_anomaly_gunslinger": "d31ed61d91629329dec67c81706959ec8b2fd642",
+    "gamma_setup": "cb58077bb9aca5c485702a63821b3381abc8722e"
+  },
+  "cli": {
+    "version": "1.44.0",
+    "sha256": "f1a19d74d9746adad6b777a8dda00aeb2af6560c9d4ee95b87267381e1412534"
+  }
+}
