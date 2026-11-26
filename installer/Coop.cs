@@ -16,7 +16,7 @@ namespace GammaCoop
         public string Path, Build, Xrrazom, Created, Where = "";
         public string BuildId = "", Source = "", Profile = "";
         public int Format = 1;
-        public bool HasKeybinds;
+        public bool HasKeybinds, HasFiles;   // HasFiles: format 3, the build carries the host's file list (files.manifest)
         public long Size;
         public DateTime CreatedUtc, FileTimeUtc;
         public List<string> Mods = new List<string>();
@@ -56,7 +56,7 @@ namespace GammaCoop
     }
 
     // "build file from the host": building the zip (make_pack.ps1 / [3] Сохранить сборку) and putting it into a game (stage / [2] Загрузить сборку)
-    public static class Coop
+    public static partial class Coop
     {
         public const string PackName = "GAMMA_Coop_pack.zip";          // old name, still accepted
         public const string BuildPrefix = "GAMMA_Coop_build_";
@@ -152,7 +152,12 @@ namespace GammaCoop
             try
             {
                 if (!File.Exists(zipPath)) return null;
-                using (ZipArchive z = ZipFile.OpenRead(zipPath)) return InfoFrom(zipPath, ReadManifest(z));
+                using (ZipArchive z = ZipFile.OpenRead(zipPath))
+                {
+                    PackInfo pi = InfoFrom(zipPath, ReadManifest(z));
+                    pi.HasFiles = z.GetEntry(Integrity.ManifestEntry) != null;
+                    return pi;
+                }
             }
             catch (Exception) { return null; }
         }
@@ -355,7 +360,8 @@ namespace GammaCoop
         {
             string bdir = System.IO.Path.Combine(root, @"GAMMA Coop\backup");
             if (!Directory.Exists(bdir)) return;
-            List<string> all = new List<string>(Directory.GetDirectories(bdir));
+            List<string> all = new List<string>();
+            foreach (string d in Directory.GetDirectories(bdir)) if (!System.IO.Path.GetFileName(d).StartsWith("update-", StringComparison.OrdinalIgnoreCase)) all.Add(d);   // update-* belong to UpdateGuard
             all.Sort(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < all.Count - 3; i++)
             {
@@ -921,7 +927,7 @@ namespace GammaCoop
                 foreach (KeyValuePair<string, string> kv in plan.Info.Gamma)
                 {
                     string lv;
-                    if (local.TryGetValue(kv.Key, out lv) && !string.Equals(lv, kv.Value, StringComparison.OrdinalIgnoreCase)) d.GammaDiff.Add(kv.Key);
+                    if (!local.TryGetValue(kv.Key, out lv) || !string.Equals(lv, kv.Value, StringComparison.OrdinalIgnoreCase)) d.GammaDiff.Add(kv.Key);
                 }
             }
             return d;
@@ -1144,7 +1150,7 @@ namespace GammaCoop
                     using (SHA256 h = SHA256.Create()) buildId = Hex(h.ComputeHash(new UTF8Encoding(false).GetBytes(string.Join("\n", idLines.ToArray())))).Substring(0, 12);
 
                     Dictionary<string, object> man = new Dictionary<string, object>();
-                    man["format"] = 2;
+                    man["format"] = 3;
                     man["build"] = BuildName; man["xrrazom"] = XrrazomVer;
                     man["buildId"] = buildId;
                     man["created"] = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
@@ -1163,6 +1169,15 @@ namespace GammaCoop
                     pd["repos"] = pr;
                     man["passport"] = pd;
                     man["files"] = manifestFiles;
+                    // the host's file list of ALL enabled mods (not only the custom ones): the friend's integrity check compares against it
+                    log("Список файлов всех включённых модов (для проверки целостности)…");
+                    string fmText = Integrity.BuildManifestText(gamma, Integrity.EnabledMods(ml), log, prog, aborted);
+                    ZipArchiveEntry fe = z.CreateEntry(Integrity.ManifestEntry, CompressionLevel.Optimal);
+                    using (Stream o = fe.Open())
+                    {
+                        byte[] fb = new UTF8Encoding(false).GetBytes(fmText);
+                        o.Write(fb, 0, fb.Length);
+                    }
                     ZipArchiveEntry me = z.CreateEntry("manifest.json", CompressionLevel.Optimal);
                     using (Stream o = me.Open())
                     {

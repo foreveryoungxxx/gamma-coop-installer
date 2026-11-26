@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -112,10 +113,16 @@ namespace GammaCoop
         public bool Sim;
         public bool Repair, RepairVc, NeedReboot;
         public bool Load;           // [2] Загрузить сборку / [4] repair of a chosen build: the screen says "build applied"
+        public bool FullSync;       // [U] on a GAMMA without the CLI's mod list: the old full-install path (no rollback), then the build
         public bool Update;         // [U]: first bring GAMMA itself to the sender's version (pinned commits), then apply the build
         public string PackPath;     // the build file to use (null: the newest one found)
         public bool TakeKeys;       // also put the sender's key bindings into user.ltx / axr_options.ltx
         public PackPlan Plan;       // already verified build (null: verify inside the coop stage)
+        public string RepairZip;    // a host's repair file (GAMMA_Coop_repair_*.zip) to apply instead of a build
+        public IntegrityResult CheckRes;   // result of the integrity check that ends a load / repair / update (null: not run)
+        public string CheckErr = "";
+        UpdateJournal guard;               // [U]: the backup + journal of the run in progress
+        public volatile string RollbackNote;   // what to tell the user after the mods were put back
         public double CoopPct;
         bool checkDone;
         PackInfo applied;
@@ -277,6 +284,7 @@ namespace GammaCoop
                 if (Sim)
                 {
                     if (cmd == "full-install") { if (ok) FullDone(); else Fail(err); }
+                    else if (cmd == "update apply") { if (ok) { lock (L) { FullOk = true; checkDone = true; } } else Fail(err); }
                     else if (cmd == "anomaly check") CheckDone(ok);
                     else if (cmd == "coop") Finish();
                 }
@@ -449,6 +457,15 @@ namespace GammaCoop
             AddRecent("остановлено");
             log("Остановлено пользователем");
             KillAsync();
+            // stopped while paused / waiting for ModDB: no worker is running to put the backed-up mods back, so do it here
+            bool bg = false;
+            lock (L) { if (guard != null && !workerRunning) { workerRunning = true; bg = true; } }
+            if (bg)
+            {
+                Thread rt = new Thread(delegate () { try { RollbackGuard(); } finally { lock (L) { workerRunning = false; } } });
+                rt.IsBackground = true;
+                rt.Start();
+            }
         }
 
         void RateHit()
@@ -513,11 +530,11 @@ namespace GammaCoop
                         if (PgIs("config")) SkipStage("config", 1);
                         else if (!RunStage("config", StageConfig)) return;
                         if (PgIs("install")) { SkipStage("install", -1); FullDone(); }
-                        else if (!RunStage("install", StageInstall)) return;
-                        if (Update)
+                        else if (!RunStage("install", Update && !FullSync ? (Func<bool>)StageUpdate : StageInstall)) return;
+                        if (Update && !FullSync)
                         {
-                            // GAMMA brought to the sender's version: the Anomaly check and the archive cleanup are not needed here
-                            lock (L) { St[5] = "skip"; St[6] = "skip"; checkDone = true; }
+                            // GAMMA brought to the sender's version: Anomaly is never touched, no check and no archive cleanup
+                            lock (L) { St[2] = "skip"; St[5] = "skip"; St[6] = "skip"; checkDone = true; }
                         }
                         else
                         {
@@ -536,12 +553,16 @@ namespace GammaCoop
                     else if (!RunStage("vc", StageVc)) return;
                 }
                 if (!Repair && PgIs("shortcut")) SkipStage("shortcut", 9);
+                else if (RepairZip != null) SetSt(9, "skip");
                 else if (!RunStage("shortcut", StageShortcut)) return;
+                if (Repair || Load || Update) RunIntegrity();
+                if (abort != null) return;
                 Finish();
             }
             catch (Exception e) { log("Исключение: " + e); Fail(e.Message); }
             finally
             {
+                StopModList();
                 bool again;
                 lock (L)
                 {
@@ -670,6 +691,8 @@ namespace GammaCoop
             a.Append(" --gamma ").Append(Q(Path.Combine(root, "GAMMA")));
             a.Append(" --cache ").Append(Q(Path.Combine(root, "cache")));
             a.Append(" --download-threads 4");
+            // update: the CLI diffs the installed mods against THIS list (the sender's), not against the newest online one
+            if (Update && !FullSync) a.Append(" --mod-pack-maker-url ").Append(ServeModList());
             string sha;
             if (pass.Repos.TryGetValue("Stalker_GAMMA", out sha)) a.Append(" --stalker-gamma-repo-branch ").Append(sha);
             if (pass.Repos.TryGetValue("gamma_large_files_v2", out sha)) a.Append(" --gamma-large-files-repo-branch ").Append(sha);
@@ -720,6 +743,148 @@ namespace GammaCoop
             return true;
         }
 
+        // the file the CLI's update needs: written by its own full-install only (the official launcher does not write it)
+        public static string InstalledListJson(string root) { return Path.Combine(root, @"GAMMA\profiles\G.A.M.M.A\modpack_maker_list.json"); }
+
+        TcpListener modSrv;
+
+        // the CLI only reads the mod list over http: serve the sender's list on 127.0.0.1 (one tiny thread, stopped when the run ends)
+        string ServeModList()
+        {
+            StopModList();
+            byte[] body = File.ReadAllBytes(pass.ModPackMaker);
+            TcpListener l = new TcpListener(IPAddress.Loopback, 0);
+            l.Start();
+            modSrv = l;
+            Thread t = new Thread(delegate ()
+            {
+                try
+                {
+                    while (true)
+                    {
+                        using (TcpClient c = l.AcceptTcpClient())
+                        {
+                            c.ReceiveTimeout = 3000;
+                            NetworkStream ns = c.GetStream();
+                            byte[] buf = new byte[4096];
+                            try { ns.Read(buf, 0, buf.Length); } catch (IOException) { }
+                            byte[] h = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: " + body.Length + "\r\nConnection: close\r\n\r\n");
+                            ns.Write(h, 0, h.Length); ns.Write(body, 0, body.Length); ns.Flush();
+                        }
+                    }
+                }
+                catch (Exception) { }
+            });
+            t.IsBackground = true;
+            t.Start();
+            return "http://127.0.0.1:" + ((IPEndPoint)l.LocalEndpoint).Port + "/modpack_maker_list.txt";
+        }
+
+        void StopModList()
+        {
+            TcpListener l = modSrv; modSrv = null;
+            if (l != null) { try { l.Stop(); } catch (Exception) { } }
+        }
+
+        // the installer's own idea of what is extracted now: the repo commits of the installer's passport, then the CLI's "applied commit" markers
+        Dictionary<string, string> OldCommits()
+        {
+            Dictionary<string, string> r = new Dictionary<string, string>(Coop.PassportRepos(Path.Combine(appDir, "passport")));
+            foreach (string repo in UpdateGuard.Repos)
+            {
+                try
+                {
+                    string f = Path.Combine(root, @"cache\" + repo + ".applied-commit");
+                    if (File.Exists(f)) { string s = File.ReadAllText(f).Trim(); if (s.Length == 40) r[repo] = s; }
+                }
+                catch (Exception) { }
+            }
+            return r;
+        }
+
+        // before the CLI runs: work out which mod folders it can write to and copy them away (UpdateGuard). false = the update must not run
+        // (Fail was called, or the run was stopped).
+        bool PrepareGuard()
+        {
+            PackInfo pk = PickPack();
+            string buildId = pk != null ? pk.BuildId : "";
+            UpdateJournal j = guard ?? UpdateGuard.Load(root);
+            if (j != null && j.State == "running")
+            {
+                if (j.Copied && j.BuildId == buildId) { guard = j; log("Продолжаю прерванное обновление: резерв модов уже есть (" + j.Backup + ")"); return true; }
+                if (j.Copied) { Fail("Прошлое обновление не закончено — сначала верни моды как были (в меню [R]), потом начни это."); return false; }
+                UpdateGuard.Rollback(root, j, log, null);   // the copy never finished: the game was not touched, this only removes the half copy
+            }
+            Action<double, string> pr = delegate (double f, string w) { Progress("Резерв модов", "Extract", f, 0, 0, false, 0, 0, f >= 1.0, 4); };
+            try
+            {
+                UpdatePlan plan = UpdateGuard.Plan(root, File.ReadAllText(InstalledListJson(root), Encoding.UTF8), File.ReadAllText(pass.ModPackMaker, Encoding.UTF8),
+                    OldCommits(), pass.Repos, UpdateGuard.HttpGet, log);
+                if (abort != null) return false;
+                guard = UpdateGuard.Begin(root, plan, buildId, PackPath, log, pr, delegate () { return abort != null; });
+            }
+            catch (Exception e)
+            {
+                log("Резерв перед обновлением: " + e);
+                if (abort == null) Fail("Обновление не запущено: " + e.Message + (e.Message.Contains("ничего не изменено") ? "" : " В игре ничего не изменено."));
+                return false;
+            }
+            return guard != null;
+        }
+
+        // puts the backed-up mods back; the text for the user goes to RollbackNote
+        void RollbackGuard()
+        {
+            UpdateJournal j = guard;
+            if (j == null) return;
+            try
+            {
+                UpdateGuard.Rollback(root, j, log, null);
+                guard = null;
+                RollbackNote = "Обновление прервано — моды возвращены как были";
+            }
+            catch (Exception e)
+            {
+                log("Откат обновления не удался: " + e);
+                RollbackNote = "Не удалось вернуть моды: " + e.Message + ". Запусти установщик снова — он предложит вернуть моды из резерва (меню, клавиша R).";
+            }
+        }
+
+        // [U]: incremental. The CLI's `update apply` downloads only the mods whose archive differs from what is installed and
+        // re-extracts the repos pinned in config; it never touches Anomaly. Needs the list written by the CLI's own full-install.
+        // The mod folders it can write to are copied away first; a failure or a stop puts them back (a pause keeps them for the resume).
+        bool StageUpdate()
+        {
+            if (!File.Exists(InstalledListJson(root)))
+            {
+                StopModList();
+                Fail("Обновить GAMMA по частям нельзя: нет списка установленных модов (его пишет только полная установка этим установщиком). Применяй сборку без [U].");
+                return false;
+            }
+            if (!PrepareGuard()) { StopModList(); return false; }
+            StringBuilder a = new StringBuilder("update apply --json --preserve-user-settings --preserve-mcm-settings");
+            if (File.Exists(Path.Combine(root, @"GAMMA\resume.txt"))) a.Append(" --resume");
+            int code;
+            try { code = RunCli(a.ToString()); } finally { StopModList(); }
+            if (abort != null)
+            {
+                if (abort == "stop") RollbackGuard();   // pause / rate limit: the run goes on later with the same backup
+                return false;
+            }
+            bool ok; string err;
+            lock (L) { ok = resSeen && resOk; err = resErr ?? lastErr; }
+            if (!ok)
+            {
+                RollbackGuard();
+                Fail((err ?? ("update apply завершился с кодом " + code)) + " " + RollbackNote);
+                return false;
+            }
+            UpdateGuard.Commit(root, guard, log);
+            guard = null;
+            lock (L) { FullOk = true; checkDone = true; }
+            return true;
+        }
+
         void StageCheck()
         {
             int code = RunCli("anomaly check --json");
@@ -764,8 +929,27 @@ namespace GammaCoop
             }
         }
 
+        public bool WorkerBusy { get { lock (L) { return workerRunning; } } }
+
+        // read-only check of the mods against the host's file list (or a local sanity check); the result goes to the done screen and the report files
+        void RunIntegrity()
+        {
+            if (Sim) return;
+            try
+            {
+                string zip = RepairZip == null ? (PackPath ?? (applied != null ? applied.Path : null)) : null;
+                Action<double, string> cb = delegate (double f, string w) { Progress("Проверка целостности", "CheckMd5", f, 0, 0, false, 0, 0, f >= 1.0, 7); };
+                IntegrityResult r = Integrity.Run(root, zip, cb, delegate () { return abort != null; }, log);
+                if (r.Aborted) return;
+                Integrity.SaveReport(root, r, Integrity.ReportFile(root), Finder.DownloadsDir(), log);
+                lock (L) { CheckRes = r; }
+            }
+            catch (Exception e) { log("Проверка целостности не выполнена: " + e.Message); lock (L) { CheckErr = e.Message; } }
+        }
+
         void Finish()
         {
+            if (Sim && (Repair || Load || Update)) { IntegrityResult sr = new IntegrityResult(); sr.ModsChecked = 580; sr.FilesChecked = 71696; lock (L) { CheckRes = sr; } }
             lock (L) { Phase = Phase.Done; FinishedAt = Now(); }
             ProgressFile p = Prog;
             if (p != null) { if (Repair) p.SetRunning(false, null); else p.SetFinished(); }
@@ -783,6 +967,18 @@ namespace GammaCoop
         bool StageCoop()
         {
             SetSt(7, "active");
+            if (RepairZip != null)
+            {
+                try
+                {
+                    if (Finder.GameRunning()) { Fail("Игра или Mod Organizer 2 запущены. Закрой их и нажми Enter, чтобы повторить. В игре ничего не изменено."); return false; }
+                    Action<double, string> rp = delegate (double f, string what) { lock (L) { CoopPct = f; } Progress("Кооп-пакет", "Extract", f, 0, 0, false, 0, 0, false, 7); };
+                    if (!Coop.ApplyRepair(RepairZip, root, log, rp, delegate () { return abort != null; })) return false;
+                }
+                catch (Exception e) { log("Починка: " + e); Fail("Починка не удалась: " + e.Message + " Старые моды возвращены."); return false; }
+                SetSt(7, "done");
+                return abort == null;
+            }
             PackInfo pk = PickPack();
             if (pk == null)
             {
@@ -1023,8 +1219,9 @@ namespace GammaCoop
             e.Add(Raw(2.0, "{\"type\":\"sim\",\"stage\":0,\"state\":\"done\"}"));
             e.Add(Raw(2.0, "{\"type\":\"sim\",\"stage\":1,\"state\":\"active\"}"));
             e.Add(Raw(3.0, "{\"type\":\"sim\",\"stage\":1,\"state\":\"done\"}"));
+            if (Update) { BuildSimUpdate(e); return; }
             double t = 3.5;
-            e.Add(Raw(3.4, "{\"type\":\"log\",\"level\":\"Information\",\"message\":\"Anomaly 1.5.3: скачиваю с зеркала faith-beam.com\"}"));
+            e.Add(Raw(3.4,"{\"type\":\"log\",\"level\":\"Information\",\"message\":\"Anomaly 1.5.3: скачиваю с зеркала faith-beam.com\"}"));
             string an = "Anomaly-1.5.3-Full.mt-mx5.7z";
             long asz = 6000000000L;
             for (int s = 1; ; s++)
@@ -1088,6 +1285,33 @@ namespace GammaCoop
             for (int i = 0; i < fl.Length; i++) e.Add(Raw(tEnd + 0.5 + i * 0.4, "{\"type\":\"checksum\",\"file\":\"" + fl[i] + "\",\"status\":\"Ok\"}"));
             e.Add(Raw(tEnd + 4, "{\"type\":\"result\",\"command\":\"anomaly check\",\"success\":true,\"exitCode\":0,\"error\":null}"));
             AddCoopSim(e, tEnd + 5, false);
+            FinishSim(e, ends);
+        }
+
+        // [U] simulation: no Anomaly, only the differing repos and a handful of mods
+        void BuildSimUpdate(List<SimEv> e)
+        {
+            lock (L) { St[2] = "skip"; St[5] = "skip"; St[6] = "skip"; }
+            e.Add(Raw(3.4, "{\"type\":\"log\",\"level\":\"Information\",\"message\":\"Обновление: 2 репозитория и 4 мода отличаются, Anomaly не трогаю\"}"));
+            double t = 3.5;
+            string[] repos = { "Stalker_GAMMA", "gamma_large_files_v2" };
+            for (int i = 0; i < repos.Length; i++)
+            {
+                for (int k = 1; k <= 3; k++) e.Add(Prg(t + k, repos[i], "Download", k / 3.0, 0, 0, i + (k == 3 ? 1 : 0), 2, false));
+                t += 3;
+            }
+            List<double> ends = new List<double>();
+            for (int i = 0; i < 4; i++)
+            {
+                string name = "Updated_Mod_" + (i + 1).ToString("00") + ".7z";
+                long size = 60000000L;
+                for (int s = 1; s <= 3; s++) e.Add(Prg(t + s, name, "Download", s / 3.0, s * 20000000L, size, 0, 4, true));
+                e.Add(Prg(t + 4, name, "Extract", 1.0, 0, 0, 0, 4, true));
+                t += 4;
+                ends.Add(t);
+            }
+            e.Add(Raw(t + 1, "{\"type\":\"result\",\"command\":\"update apply\",\"success\":true,\"exitCode\":0,\"error\":null}"));
+            AddCoopSim(e, t + 2, false);
             FinishSim(e, ends);
         }
 

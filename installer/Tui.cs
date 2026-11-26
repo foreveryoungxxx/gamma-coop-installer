@@ -1127,7 +1127,8 @@ namespace GammaCoop
                 Log("Сон ПК запрещён, TUI запущен");
                 StartAll();
                 HubInit();
-                if (loadFile != null) { Log("Сборка из лаунчера: " + loadFile); StartLoad(loadFile, loadRoot); }
+                if (CheckPendingUpdate()) { if (loadFile != null) Log("Сборка из лаунчера отложена: сначала незаконченное обновление"); }
+                else if (loadFile != null) { Log("Сборка из лаунчера: " + loadFile); StartLoad(loadFile, loadRoot); }
                 Stopwatch sw = Stopwatch.StartNew();
                 long frameNo = 0;
                 double lastPump = 0;

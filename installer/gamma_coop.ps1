@@ -7,7 +7,7 @@
 $root = $PSScriptRoot
 $code = 0
 try {
-    $src = 'Tui.cs', 'Engine.cs', 'Coop.cs', 'InstallUi.cs', 'Safety.cs', 'Progress.cs', 'Finder.cs', 'Hub.cs' | ForEach-Object { Join-Path $root $_ }
+    $src = 'Tui.cs', 'Engine.cs', 'Coop.cs', 'InstallUi.cs', 'Safety.cs', 'Progress.cs', 'Finder.cs', 'Hub.cs', 'Integrity.cs', 'UpdateGuard.cs', 'SimTests.cs' | ForEach-Object { Join-Path $root $_ }
     Add-Type -Path $src -ReferencedAssemblies 'System.Core', 'System.Management', 'System.Web.Extensions', 'System.IO.Compression', 'System.IO.Compression.FileSystem', 'System.Windows.Forms'
     $code = [GammaCoop.App]::Run($root, [bool]$Headless, $Frames, [bool]$Simulate)
 }

@@ -18,6 +18,7 @@ namespace GammaCoop
         int screen = 3;            // 0 start (install), 1 consent, 2 install/progress, 3 hub (menu, save / load build)
         bool consent = false;
         bool showLog = false, confirmStop = false;
+        bool stopping;             // [U] stopped: waiting until the worker has put the mods back
         Engine eng;
         Passport pass;
         int savedSh, savedOy;
@@ -110,6 +111,7 @@ namespace GammaCoop
         // ------------------------------------------------------------ progress screen
         void DrawInstall(double t)
         {
+            if (stopping && !eng.WorkerBusy) { FinishStop(); return; }
             eng.Tick();
             double now = eng.Now();
             Phase ph;
@@ -210,8 +212,16 @@ namespace GammaCoop
             if (confirmStop)
             {
                 List<string> l = new List<string>(); List<int> c = new List<int>();
-                Ln(l, c, "Остановить? Потом можно продолжить с места.", CText);
-                Dialog("ОСТАНОВИТЬ", l, c, "[Enter] Да   [Esc] Нет", 56, true);
+                if (eng.Update) Ln(l, c, "Остановить? Изменённые моды будут возвращены как были.", CText);
+                else Ln(l, c, "Остановить? Потом можно продолжить с места.", CText);
+                Dialog("ОСТАНОВИТЬ", l, c, "[Enter] Да   [Esc] Нет", 62, true);
+            }
+            if (stopping)
+            {
+                List<string> l = new List<string>(); List<int> c = new List<int>();
+                Ln(l, c, "Возвращаю моды как были…", Tone[7]);
+                Ln(l, c, "Не закрывай окно, это займёт немного времени.", CMuted);
+                Dialog("ОТКАТ ОБНОВЛЕНИЯ", l, c, null, 62, true);
             }
             if (showLog) DrawLog();
         }
@@ -263,10 +273,11 @@ namespace GammaCoop
             double gbDl, freed, mins;
             string note;
             bool reboot, rep;
-            lock (eng.L) { gbDl = eng.DlBytes / 1073741824.0; freed = eng.FreedGb; mins = (eng.FinishedAt - eng.StartedAt) / 60.0; note = eng.Note; reboot = eng.NeedReboot; rep = eng.Repair; }
+            IntegrityResult cr; string cerr;
+            lock (eng.L) { gbDl = eng.DlBytes / 1073741824.0; freed = eng.FreedGb; mins = (eng.FinishedAt - eng.StartedAt) / 60.0; note = eng.Note; reboot = eng.NeedReboot; rep = eng.Repair; cr = eng.CheckRes; cerr = eng.CheckErr; }
             List<string> l = new List<string>(); List<int> c = new List<int>();
             Ln(l, c, "✓", COk);
-            Ln(l, c, eng.Load ? "Готово. Сборка применена." : (rep ? "Готово. Кооп починен." : "Готово. " + pass.Name + " стоит в " + root + "."), Tone[7]);
+            Ln(l, c, eng.RepairZip != null ? "Готово. Моды из файла починки установлены." : (eng.Load ? "Готово. Сборка применена." : (rep ? "Готово. Кооп починен." : "Готово. " + pass.Name + " стоит в " + root + ".")), Tone[7]);
             Ln(l, c, "", CText);
             Ln(l, c, "На рабочем столе есть ярлыки «GAMMA Coop», «GAMMA Coop — сборка» и инструкция.", CText);
             Ln(l, c, "", CText);
@@ -277,8 +288,25 @@ namespace GammaCoop
                 Ln(l, c, st, CMuted);
             }
             if (note.Length > 0) Ln(l, c, note, CWarn);
+            if (cr != null)
+            {
+                if (cr.Ok) Ln(l, c, cr.Line(), COk);
+                else
+                {
+                    Ln(l, c, "Проверка целостности: проблемы в " + cr.Bad.Count + " модах — игра может вылетать.", CWarn);
+                    Ln(l, c, "Попроси хоста: Сохранить моды для починки → " + NameList(cr.BadNames(), 3), CWarn);
+                    if (cr.CopyPath.Length > 0) Ln(l, c, "Файл для хоста: " + cr.CopyPath, CMuted);
+                }
+            }
+            else if (cerr.Length > 0) Ln(l, c, "Проверка целостности не выполнена: " + cerr, CWarn);
             if (reboot) Ln(l, c, "Нужна перезагрузка Windows — сделай её перед первым запуском игры.", CWarn);
             Dialog("ГОТОВО", l, c, "[Enter] Запустить игру   [I] Инструкция   [любая другая клавиша] Выход", 90, true);
+        }
+
+        static string NameList(List<string> names, int max)
+        {
+            string s = string.Join(", ", names.GetRange(0, Math.Min(max, names.Count)).ToArray());
+            return names.Count > max ? s + " и ещё " + (names.Count - max) : s;
         }
 
         void DrawLog()
@@ -358,7 +386,10 @@ namespace GammaCoop
         }
 
         // pk: the build file to use (null = the newest one found)
-        void BeginRepair(PackInfo pk)
+        void BeginRepair(PackInfo pk) { BeginRepair(pk, null); }
+
+        // repairZip: a host's repair file to apply instead of a build
+        void BeginRepair(PackInfo pk, string repairZip)
         {
             string blocked = null;
             prog = null;
@@ -393,10 +424,11 @@ namespace GammaCoop
             eng.Prog = prog;
             eng.Repair = true;
             if (pk != null) eng.PackPath = pk.Path;
+            eng.RepairZip = repairZip;
             for (int i = 0; i < 7; i++) eng.St[i] = "skip";
-            eng.RepairVc = !File.Exists(Coop.InstalledJson(root));
+            eng.RepairVc = repairZip == null && !File.Exists(Coop.InstalledJson(root));
             if (!eng.RepairVc) eng.St[8] = "skip";
-            Log("Починка кооп: папка " + root + (simulate ? " (симуляция)" : ""));
+            Log((repairZip != null ? "Починка модов из файла хоста " + repairZip : "Починка кооп") + ": папка " + root + (simulate ? " (симуляция)" : ""));
             screen = 2;
             eng.Start();
         }
@@ -410,9 +442,22 @@ namespace GammaCoop
             catch (Exception e) { Log("Не удалось запустить " + path + ": " + e.Message); }
         }
 
+        // [U] was stopped: the worker puts the backed-up mods back; the screen waits for it (DrawInstall -> FinishStop)
+        void FinishStop()
+        {
+            string note = eng.RollbackNote;
+            stopping = false;
+            eng = null;
+            pathRelaxed = false;
+            screen = 0;
+            RefreshFolder();
+            SetMsg(note ?? "Остановлено. Нажми Enter, чтобы продолжить с места", note != null && note.StartsWith("Не удалось") ? CBad : CWarn, 8);
+        }
+
         void DoStop()
         {
             eng.Stop();
+            if (eng.Update && !simulate) { stopping = true; Log("[U] остановлен, жду возврата модов"); return; }
             eng = null;
             pathRelaxed = false;
             screen = 0;
@@ -429,6 +474,7 @@ namespace GammaCoop
                 return;
             }
             if (eng == null) { screen = 0; return; }
+            if (stopping) return;
             if (showLog) { showLog = false; return; }
             if (confirmStop)
             {
@@ -569,6 +615,7 @@ namespace GammaCoop
             eng = null; screen = 3;
             string hubRes = RunHubSim(emit);
             summary += "," + hubRes;
+            summary += "," + RunSelfTests(emit);
 
             File.WriteAllText(Path.Combine(Path.GetDirectoryName(logPath), "frames_install.txt"), all.ToString(), new UTF8Encoding(true));
             o.WriteLine("{\"sim\":true,\"frames\":" + n + ",\"mainFrames\":" + mainFrames + ",\"simSeconds\":" + simSecs.ToString("F0", Inv) + "," + summary

@@ -7,3 +7,4 @@ installer/logs/
 
 # local temp
 *.tmp
+installer/last_root.txt

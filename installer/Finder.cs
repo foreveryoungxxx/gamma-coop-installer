@@ -270,6 +270,59 @@ namespace GammaCoop
             return res;
         }
 
+        // files by pattern in the usual places (Downloads, LocalSend, Desktop, beside the installer, inside the game folder), newest first: {path, where}
+        static List<string[]> FindByPattern(string root, string appDir, string pattern)
+        {
+            List<Place> places = new List<Place>();
+            AddPlace(places, DownloadsDir(), "Загрузки", pattern);
+            AddPlace(places, LocalSendDir(), "LocalSend", pattern);
+            AddPlace(places, DesktopDir(), "Рабочий стол", pattern);
+            if (appDir != null) AddPlace(places, appDir, "папка установщика", pattern);
+            if (root != null) AddPlace(places, Path.Combine(root, @"GAMMA Coop\inbox"), "inbox", pattern);
+            List<string[]> all = new List<string[]>();
+            List<string> seen = new List<string>();
+            foreach (Place pl in places)
+            {
+                string[] files;
+                try { files = Directory.Exists(pl.Dir) ? Directory.GetFiles(pl.Dir, pattern) : new string[0]; }
+                catch (Exception) { continue; }
+                foreach (string f in files)
+                {
+                    string full = Clean(f);
+                    if (full == null || seen.Contains(full.ToLowerInvariant())) continue;
+                    seen.Add(full.ToLowerInvariant());
+                    all.Add(new string[] { full, pl.Label });
+                }
+            }
+            all.Sort(delegate (string[] a, string[] b) { return File.GetLastWriteTimeUtc(b[0]).CompareTo(File.GetLastWriteTimeUtc(a[0])); });
+            return all;
+        }
+
+        // repair files (GAMMA_Coop_repair_*.zip from the host) not applied in this game folder yet, newest first
+        public static List<RepairInfo> FindRepairFiles(string root, string appDir)
+        {
+            List<RepairInfo> r = new List<RepairInfo>();
+            foreach (string[] x in FindByPattern(root, appDir, Coop.RepairPrefix + "*.zip"))
+            {
+                RepairInfo ri = Coop.ProbeRepair(x[0]);
+                if (ri == null || (root != null && Coop.RepairApplied(root, x[0]))) continue;
+                ri.Where = x[1]; ri.FileTimeUtc = File.GetLastWriteTimeUtc(x[0]);
+                r.Add(ri);
+            }
+            return r;
+        }
+
+        // integrity reports from friends (GAMMA_Coop_report_*.txt), newest first: {path, where}
+        public static List<string[]> FindReportFiles(string root, string appDir)
+        {
+            List<string[]> r = new List<string[]>();
+            foreach (string[] x in FindByPattern(root, appDir, Integrity.ReportPrefix + "*.txt"))
+            {
+                try { if (Integrity.ReadReportMods(x[0]).Count > 0) r.Add(x); } catch (Exception) { }
+            }
+            return r;
+        }
+
         // Mod Organizer or the game is running (any copy)
         public static bool GameRunning()
         {

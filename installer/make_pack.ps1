@@ -8,7 +8,7 @@ $here = $PSScriptRoot
 if (-not $OutDir) { $OutDir = Split-Path -Parent $here }
 
 try {
-    Add-Type -Path (Join-Path $here 'Coop.cs'), (Join-Path $here 'Safety.cs'), (Join-Path $here 'Finder.cs') -ReferencedAssemblies 'System.Core', 'System.Web.Extensions', 'System.IO.Compression', 'System.IO.Compression.FileSystem'
+    Add-Type -Path (Join-Path $here 'Coop.cs'), (Join-Path $here 'Safety.cs'), (Join-Path $here 'Finder.cs'), (Join-Path $here 'Integrity.cs') -ReferencedAssemblies 'System.Core', 'System.Web.Extensions', 'System.IO.Compression', 'System.IO.Compression.FileSystem'
     [GammaCoop.Finder]::AppDir = $here
 
     if (-not $Root) {
